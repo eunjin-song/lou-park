@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: lou-park
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: node server/index.ts
+    healthCheckPath: /healthz
+    envVars:
+      - key: PARK_PUBLIC
+        value: "1"
+      - key: NODE_VERSION
+        value: "22.21.0"
