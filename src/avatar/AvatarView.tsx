@@ -7,7 +7,8 @@ import { dampAngle } from '../game/movement.ts'
 import type { MutablePose } from '../game/types.ts'
 import { removeLabel, syncLabel } from '../ui/labelAnchors.ts'
 import { Dog } from './Dog.tsx'
-import { dogTarget, integrateDog, placeDog, type DogPose } from './followDog.ts'
+import { PLAYGROUND } from '../../shared/places.ts'
+import { dogTarget, integrateDog, integratePlay, placeDog, type DogPose, type PlayWander } from './followDog.ts'
 import { Human } from './Human.tsx'
 
 /**
@@ -44,6 +45,8 @@ export function AvatarView({
   )
   const shownDog = syncedDog ?? dog
   const alive = useRef(true)
+  const playing = useRef(false)
+  const wander = useRef<PlayWander>({ x: PLAYGROUND.x, z: PLAYGROUND.z, pause: 0 })
 
   useEffect(() => {
     alive.current = true
@@ -67,7 +70,20 @@ export function AvatarView({
       person.current.rotation.y = displayedYaw.current
     }
 
-    if (!syncedDog) integrateDog(dog, pose, step)
+    if (!syncedDog) {
+      if (pose.dogPlaying) {
+        if (!playing.current) {
+          playing.current = true
+          wander.current.pause = 0
+          wander.current.x = PLAYGROUND.x
+          wander.current.z = PLAYGROUND.z
+        }
+        integratePlay(dog, wander.current, step)
+      } else {
+        playing.current = false
+        integrateDog(dog, pose, step)
+      }
+    }
     onDog?.(shownDog)
     if (dogGroup.current) {
       dogGroup.current.position.set(shownDog.x, 0, shownDog.z)
@@ -80,6 +96,7 @@ export function AvatarView({
         nickname,
         self: pose.id === 'local',
         bubble: bubble?.text ?? null,
+        status: pose.resting ? '쉬는 중' : null,
         x: pose.x,
         y: 2.22,
         z: pose.z,

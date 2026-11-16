@@ -14,15 +14,16 @@ export function Human({ pose }: { pose: MutablePose }) {
   const swing = useRef(0)
 
   useFrame(({ clock }, dt) => {
-    const target = pose.moving ? Math.sin(clock.elapsedTime * 8) * 0.62 : 0
+    const sitting = pose.resting
+    const target = sitting ? 1.05 : pose.moving ? Math.sin(clock.elapsedTime * 8) * 0.62 : 0
     const blend = 1 - Math.exp(-14 * dt)
     swing.current += (target - swing.current) * blend
-    const bob = pose.moving ? Math.abs(Math.sin(clock.elapsedTime * 8)) * 0.045 : 0
+    const bob = sitting ? -0.32 : pose.moving ? Math.abs(Math.sin(clock.elapsedTime * 8)) * 0.045 : 0
     if (body.current) body.current.position.y = bob
     if (leftLeg.current) leftLeg.current.rotation.x = swing.current
-    if (rightLeg.current) rightLeg.current.rotation.x = -swing.current
-    if (leftArm.current) leftArm.current.rotation.x = -swing.current * 0.75
-    if (rightArm.current) rightArm.current.rotation.x = swing.current * 0.75
+    if (rightLeg.current) rightLeg.current.rotation.x = sitting ? swing.current : -swing.current
+    if (leftArm.current) leftArm.current.rotation.x = sitting ? 0.35 : -swing.current * 0.75
+    if (rightArm.current) rightArm.current.rotation.x = sitting ? 0.35 : swing.current * 0.75
   })
 
   return (

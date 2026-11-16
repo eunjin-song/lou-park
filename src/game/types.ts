@@ -9,6 +9,8 @@ export type AvatarSnapshot = {
   z: number
   yaw: number
   moving: boolean
+  resting: boolean
+  dogPlaying: boolean
 }
 
 export type MutablePose = AvatarSnapshot

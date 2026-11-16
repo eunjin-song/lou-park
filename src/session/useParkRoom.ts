@@ -4,8 +4,10 @@ import { SPAWN_X, SPAWN_Z } from '../game/constants.ts'
 import type { MutablePose } from '../game/types.ts'
 import { CHAT_DURATION_MS, PARK_WS_PATH, readChat, readServerMessage, type ChatBubble, type NetPlayer } from '../../shared/protocol.ts'
 import { dogTarget, type DogPose } from '../avatar/followDog.ts'
+import { bindTidy } from '../input/parkActions.ts'
 import { publishConnection } from './connection.ts'
 import { bindChatSender, publishChatError } from './chatChannel.ts'
+import { publishFeed } from './worldFeed.ts'
 
 const SEND_INTERVAL_MS = 100
 const HEARTBEAT_MS = 1000
@@ -25,6 +27,8 @@ function changedEnough(local: MutablePose, dog: DogPose, sent: NetPlayer | null)
     Math.hypot(local.x - sent.x, local.z - sent.z) > 0.02 ||
     Math.abs(yawGap) > 0.02 ||
     local.moving !== sent.moving ||
+    local.resting !== sent.resting ||
+    local.dogPlaying !== sent.dogPlaying ||
     Math.hypot(dog.x - sent.dogX, dog.z - sent.dogZ) > 0.02 ||
     Math.abs(dogYawGap) > 0.02 ||
     dog.moving !== sent.dogMoving
@@ -79,6 +83,8 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
         existing.z = player.z
         existing.yaw = player.yaw
         existing.moving = player.moving
+        existing.resting = player.resting
+        existing.dogPlaying = player.dogPlaying
         existing.dogX = player.dogX
         existing.dogZ = player.dogZ
         existing.dogYaw = player.dogYaw
@@ -105,6 +111,8 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
         z: local.z,
         yaw: local.yaw,
         moving: local.moving,
+        resting: local.resting,
+        dogPlaying: local.dogPlaying,
         dogX: pet.x,
         dogZ: pet.z,
         dogYaw: pet.yaw,
@@ -117,6 +125,8 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
           z: message.z,
           yaw: message.yaw,
           moving: message.moving,
+          resting: message.resting,
+          dogPlaying: message.dogPlaying,
           dogX: message.dogX,
           dogZ: message.dogZ,
           dogYaw: message.dogYaw,
@@ -139,6 +149,16 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
       return true
     }
     bindChatSender(text => chatSender.current(text))
+    bindTidy({
+      scoop: () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN || !netId) return
+        socket.send(JSON.stringify({ type: 'scoop' }))
+      },
+      bin: () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN || !netId) return
+        socket.send(JSON.stringify({ type: 'bin' }))
+      },
+    })
 
     const connect = () => {
       if (closed) return
@@ -187,7 +207,16 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
             }
           }
           replaceRoster(message.players)
+          publishFeed({ poops: message.poops, selfId: message.id, holding: message.holding })
           sendState(true)
+          return
+        }
+        if (message.type === 'poops') {
+          publishFeed({ poops: message.poops })
+          return
+        }
+        if (message.type === 'bag') {
+          publishFeed({ holding: message.holding })
           return
         }
         if (message.type === 'join' || message.type === 'state') {
@@ -208,6 +237,7 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
         netId = null
         setSelfId('')
         setBubbles({})
+        publishFeed({ poops: [], selfId: '', holding: false })
         lastSent = null
         targets.current.clear()
         setRoster([])
@@ -231,6 +261,8 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
       send.current = () => {}
       chatSender.current = () => false
       bindChatSender(() => false)
+      bindTidy({ scoop: () => {}, bin: () => {} })
+      publishFeed({ poops: [], selfId: '', holding: false })
       window.clearTimeout(reconnectTimer)
       socket?.close()
     }

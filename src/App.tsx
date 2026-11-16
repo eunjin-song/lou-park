@@ -5,6 +5,8 @@ import { readNickname } from '../shared/protocol.ts'
 import { NicknameEntry } from './ui/NicknameEntry.tsx'
 import { ParkScene } from './scene/ParkScene.tsx'
 import { Hud } from './ui/Hud.tsx'
+import { Joystick } from './ui/Joystick.tsx'
+import { ParkActions } from './ui/ParkActions.tsx'
 
 export default function App() {
   const [nickname, setNickname] = useState('')
@@ -13,6 +15,8 @@ export default function App() {
     <>
       {nickname ? <ParkScene nickname={nickname} /> : <NicknameEntry onEnter={name => setNickname(readNickname(name) ?? '')} />} 
       <Hud />
+      {nickname && <Joystick />}
+      {nickname && <ParkActions />}
       {nickname && <ChatInput send={sendChat} error={chatError} />}
     </>
   )

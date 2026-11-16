@@ -10,6 +10,7 @@ import {
   CAMERA_OFFSET,
 } from '../game/constants.ts'
 import { isInputBlocked } from '../input/inputGate.ts'
+import { stickPointerId } from '../input/stick.ts'
 import { dampAngle } from '../game/movement.ts'
 import type { MutablePose } from '../game/types.ts'
 
@@ -41,43 +42,72 @@ export function FollowCamera({ pose }: { pose: MutablePose }) {
   const yawTarget = useRef(0)
   const pitchTarget = useRef(INITIAL_PITCH)
   const distanceTarget = useRef(INITIAL_DISTANCE)
-  const dragging = useRef(false)
-  const pointer = useRef({ x: 0, y: 0 })
+  const mouseDrag = useRef(false)
+  const touchId = useRef<number | null>(null)
+  const mousePoint = useRef({ x: 0, y: 0 })
+  const touchPoint = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
     const overPark = (target: EventTarget | null) =>
       target instanceof Element && target.closest('.park-app') !== null
+    const isControl = (target: EventTarget | null) =>
+      target instanceof Element && target.closest('.park-control, .chat-panel, .hud, button, input, textarea, select, a') !== null
+
+    const stopAll = () => {
+      mouseDrag.current = false
+      touchId.current = null
+    }
 
     const onContextMenu = (event: MouseEvent) => {
       if (overPark(event.target)) event.preventDefault()
     }
 
     const onPointerDown = (event: PointerEvent) => {
-      if (isInputBlocked()) return
+      if (isInputBlocked() || isControl(event.target) || event.pointerId === stickPointerId()) return
+      if (event.pointerType === 'touch') {
+        if (event.clientX < window.innerWidth * 0.42 || !overPark(event.target)) return
+        touchId.current = event.pointerId
+        touchPoint.current.x = event.clientX
+        touchPoint.current.y = event.clientY
+        event.preventDefault()
+        return
+      }
       if (event.button !== 2 || !overPark(event.target)) return
-      dragging.current = true
-      pointer.current.x = event.clientX
-      pointer.current.y = event.clientY
+      mouseDrag.current = true
+      mousePoint.current.x = event.clientX
+      mousePoint.current.y = event.clientY
       event.preventDefault()
     }
 
     const onPointerMove = (event: PointerEvent) => {
-      if (isInputBlocked()) { dragging.current = false; return }
-      if (!dragging.current) return
-      if ((event.buttons & 2) === 0) {
-        dragging.current = false
+      if (isInputBlocked()) {
+        stopAll()
         return
       }
-      const dx = event.clientX - pointer.current.x
-      const dy = event.clientY - pointer.current.y
-      pointer.current.x = event.clientX
-      pointer.current.y = event.clientY
+      const touch = event.pointerId === touchId.current
+      const mouse = mouseDrag.current && event.pointerType !== 'touch'
+      if (!touch && !mouse) return
+      if (mouse && (event.buttons & 2) === 0) {
+        mouseDrag.current = false
+        return
+      }
+      const last = touch ? touchPoint.current : mousePoint.current
+      const dx = event.clientX - last.x
+      const dy = event.clientY - last.y
+      last.x = event.clientX
+      last.y = event.clientY
       yawTarget.current -= dx * YAW_SPEED
       pitchTarget.current = clampPitch(pitchTarget.current + dy * PITCH_SPEED, distanceTarget.current)
+      if (touch) event.preventDefault()
     }
 
-    const stopDrag = () => {
-      dragging.current = false
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerId === touchId.current) touchId.current = null
+      if (event.pointerType !== 'touch' && event.button === 2) mouseDrag.current = false
+    }
+
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') stopAll()
     }
 
     const onWheel = (event: WheelEvent) => {
@@ -91,19 +121,23 @@ export function FollowCamera({ pose }: { pose: MutablePose }) {
     window.addEventListener('contextmenu', onContextMenu)
     window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', stopDrag)
-    window.addEventListener('pointercancel', stopDrag)
-    window.addEventListener('blur', stopDrag)
-    window.addEventListener('park-input-reset', stopDrag)
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerUp)
+    window.addEventListener('blur', stopAll)
+    window.addEventListener('pagehide', stopAll)
+    window.addEventListener('park-input-reset', stopAll)
+    document.addEventListener('visibilitychange', onHide)
     window.addEventListener('wheel', onWheel, { passive: false })
     return () => {
       window.removeEventListener('contextmenu', onContextMenu)
       window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', stopDrag)
-      window.removeEventListener('pointercancel', stopDrag)
-      window.removeEventListener('blur', stopDrag)
-      window.removeEventListener('park-input-reset', stopDrag)
+      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointercancel', onPointerUp)
+      window.removeEventListener('blur', stopAll)
+      window.removeEventListener('pagehide', stopAll)
+      window.removeEventListener('park-input-reset', stopAll)
+      document.removeEventListener('visibilitychange', onHide)
       window.removeEventListener('wheel', onWheel)
     }
   }, [])

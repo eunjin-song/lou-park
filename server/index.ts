@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, type RawData, type WebSocket } from 'ws'
+import { BIN_USE_RADIUS, POOP_DELAY_MS, POOP_PICKUP_RADIUS, WASTE_BIN } from '../shared/places.ts'
 import { DOG_FOLLOW_DISTANCE, DOG_SIDE_OFFSET, SPAWN_YAW, SPAWN_Z } from '../src/game/constants.ts'
 import {
   CHAT_INTERVAL_MS,
@@ -12,9 +13,11 @@ import {
   MIN_STATE_INTERVAL_MS,
   PARK_WS_PATH,
   PARK_WS_PORT,
+  PLAY_RADIUS_LIMIT,
   readClientMessage,
   type NetPlayer,
   type NetPose,
+  type ParkPoop,
 } from '../shared/protocol.ts'
 
 type Visitor = {
@@ -26,6 +29,10 @@ type Visitor = {
   lastChatAt: number
   lastStateAt: number
   invalid: number
+  joinedAt: number
+  spawnedPoop: boolean
+  poop: ParkPoop | null
+  holding: boolean
 }
 
 const visitors = new Map<WebSocket, Visitor>()
@@ -51,7 +58,33 @@ function spawnForSlot(slot: number): NetPose {
     dogZ: z - forwardZ * DOG_FOLLOW_DISTANCE + rightZ * DOG_SIDE_OFFSET,
     dogYaw: yaw,
     dogMoving: false,
+    resting: false,
+    dogPlaying: false,
   }
+}
+
+function readPoopDelay(): number {
+  const raw = process.env.PARK_POOP_DELAY_MS
+  if (raw === undefined || raw.trim() === '') return POOP_DELAY_MS
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 200 || value > POOP_DELAY_MS) return POOP_DELAY_MS
+  return value
+}
+
+function clampInside(x: number, z: number) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return { x: 0, z: 0 }
+  const distance = Math.hypot(x, z)
+  if (distance <= PLAY_RADIUS_LIMIT) return { x, z }
+  const scale = PLAY_RADIUS_LIMIT / distance
+  return { x: x * scale, z: z * scale }
+}
+
+function listPoops(): ParkPoop[] {
+  const poops: ParkPoop[] = []
+  for (const visitor of visitors.values()) {
+    if (visitor.joined && visitor.poop) poops.push(visitor.poop)
+  }
+  return poops
 }
 
 function freeSlot(): number | null {
@@ -85,8 +118,12 @@ function textOf(data: RawData): string | null {
 function removeVisitor(socket: WebSocket) {
   const visitor = visitors.get(socket)
   if (!visitor) return
+  const hadPoop = visitor.poop !== null
   visitors.delete(socket)
-  if (visitor.joined) broadcast({ type: 'leave', id: visitor.id })
+  if (visitor.joined) {
+    broadcast({ type: 'leave', id: visitor.id })
+    if (hadPoop) broadcast({ type: 'poops', poops: listPoops() })
+  }
   console.log(`[park] leave ${visitor.id.slice(0, 8)} (${visitors.size}/${MAX_PLAYERS})`)
 }
 
@@ -225,7 +262,24 @@ const heartbeat = setInterval(() => {
     socket.ping()
   }
 }, 15000)
-wss.on('close', () => clearInterval(heartbeat))
+const poopDelayMs = readPoopDelay()
+if (poopDelayMs !== POOP_DELAY_MS) console.log(`[park] poop delay override ${poopDelayMs}ms`)
+const poopClock = setInterval(() => {
+  let changed = false
+  const now = Date.now()
+  for (const visitor of visitors.values()) {
+    if (!visitor.joined || visitor.spawnedPoop || now - visitor.joinedAt < poopDelayMs) continue
+    visitor.spawnedPoop = true
+    const placed = clampInside(visitor.pose.dogX, visitor.pose.dogZ)
+    visitor.poop = { id: visitor.id, ownerId: visitor.id, x: placed.x, z: placed.z }
+    changed = true
+  }
+  if (changed) broadcast({ type: 'poops', poops: listPoops() })
+}, 200)
+wss.on('close', () => {
+  clearInterval(heartbeat)
+  clearInterval(poopClock)
+})
 
 wss.on('connection', (socket) => {
   alive.add(socket)
@@ -249,6 +303,10 @@ wss.on('connection', (socket) => {
     lastChatAt: 0,
     lastStateAt: 0,
     invalid: 0,
+    joinedAt: 0,
+    spawnedPoop: false,
+    poop: null,
+    holding: false,
   }
   visitors.set(socket, visitor)
   const helloTimer = setTimeout(() => { if (!visitor.joined) socket.close(1008, 'hello timeout') }, 5000)
@@ -269,9 +327,10 @@ wss.on('connection', (socket) => {
         if (message.type === 'hello' && !visitor.joined) {
           visitor.pose.nickname = message.nickname
           visitor.joined = true
+          visitor.joinedAt = Date.now()
           clearTimeout(helloTimer)
           const alreadyHere = [...visitors.values()].filter(v => v.joined && v !== visitor).map(v => v.pose)
-          send(socket, { type: 'welcome', id, spawn, players: alreadyHere })
+          send(socket, { type: 'welcome', id, spawn, players: alreadyHere, poops: listPoops(), holding: false })
           broadcast({ type: 'join', player: visitor.pose }, socket)
           return
         }
@@ -289,6 +348,24 @@ wss.on('connection', (socket) => {
           broadcast({ type: 'chat', id: visitor.id, text: message.text })
           return
         }
+        if (message.type === 'scoop') {
+          const pile = visitor.poop
+          if (!pile || visitor.holding) return
+          if (Math.hypot(visitor.pose.x - pile.x, visitor.pose.z - pile.z) > POOP_PICKUP_RADIUS) return
+          visitor.poop = null
+          visitor.holding = true
+          broadcast({ type: 'poops', poops: listPoops() })
+          send(socket, { type: 'bag', holding: true })
+          return
+        }
+        if (message.type === 'bin') {
+          if (!visitor.holding) return
+          if (Math.hypot(visitor.pose.x - WASTE_BIN.x, visitor.pose.z - WASTE_BIN.z) > BIN_USE_RADIUS) return
+          visitor.holding = false
+          send(socket, { type: 'bag', holding: false })
+          return
+        }
+        if (message.type !== 'state') return
         if (now - visitor.lastStateAt < MIN_STATE_INTERVAL_MS) return
         visitor.lastStateAt = now
         visitor.pose = {
@@ -298,6 +375,8 @@ wss.on('connection', (socket) => {
           z: message.z,
           yaw: message.yaw,
           moving: message.moving,
+          resting: message.resting,
+          dogPlaying: message.dogPlaying,
           dogX: message.dogX,
           dogZ: message.dogZ,
           dogYaw: message.dogYaw,

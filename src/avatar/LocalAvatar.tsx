@@ -1,13 +1,17 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Vector3 } from 'three'
+import { PLAYGROUND } from '../../shared/places.ts'
 import { SPAWN_X, SPAWN_YAW, SPAWN_Z } from '../game/constants.ts'
 import { INITIAL_FLAT_BASIS, integrateMovement, updateFlatBasis } from '../game/movement.ts'
-import { readMoveInput } from '../input/readMoveInput.ts'
+import { isInputBlocked } from '../input/inputGate.ts'
+import { bindRest, whereabouts } from '../input/parkActions.ts'
+import { readMovement } from '../input/readMoveInput.ts'
 import { useKeyboard } from '../input/useKeyboard.ts'
 import { FollowCamera } from '../scene/FollowCamera.tsx'
 import { createPresence } from '../session/presence.ts'
 import { useParkRoom } from '../session/useParkRoom.ts'
+import { PoopMarks } from '../world/PoopMarks.tsx'
 import { AvatarView } from './AvatarView.tsx'
 import { dogTarget, type DogPose } from './followDog.ts'
 import { RemoteAvatar } from './RemoteAvatar.tsx'
@@ -21,6 +25,8 @@ export function LocalAvatar({ nickname }: { nickname: string }) {
       z: SPAWN_Z,
       yaw: SPAWN_YAW,
       moving: false,
+      resting: false,
+      dogPlaying: false,
     }),
   )
   const dogPose = useRef<DogPose>({
@@ -33,6 +39,14 @@ export function LocalAvatar({ nickname }: { nickname: string }) {
   const viewForward = useRef(new Vector3())
   const viewRight = useRef(new Vector3())
   const room = useParkRoom(presence.local, dogPose, placeVersion, nickname)
+  const restRequested = useRef(false)
+
+  useEffect(() => {
+    bindRest(() => {
+      restRequested.current = true
+    })
+    return () => bindRest(() => {})
+  }, [])
 
   useFrame((state, dt) => {
     const camera = state.camera
@@ -45,7 +59,22 @@ export function LocalAvatar({ nickname }: { nickname: string }) {
       viewRight.current.x,
       viewRight.current.z,
     )
-    integrateMovement(presence.local, readMoveInput(keys.current), basis.current, Math.min(dt, 0.05))
+    const input = isInputBlocked() ? { forward: 0, strafe: 0 } : readMovement(keys.current)
+    const stepping = Math.hypot(input.forward, input.strafe) > 0
+    if (stepping) presence.local.resting = false
+    else if (restRequested.current) presence.local.resting = true
+    restRequested.current = false
+    integrateMovement(
+      presence.local,
+      presence.local.resting ? { forward: 0, strafe: 0 } : input,
+      basis.current,
+      Math.min(dt, 0.05),
+    )
+    presence.local.dogPlaying = Math.hypot(presence.local.x - PLAYGROUND.x, presence.local.z - PLAYGROUND.z) <= PLAYGROUND.radius
+    whereabouts.x = presence.local.x
+    whereabouts.z = presence.local.z
+    whereabouts.moving = presence.local.moving
+    whereabouts.resting = presence.local.resting
   }, 2)
 
   useFrame(() => {
@@ -72,6 +101,7 @@ export function LocalAvatar({ nickname }: { nickname: string }) {
         <RemoteAvatar key={player.id} player={player} targets={room.targets} bubble={room.bubbles[player.id]} />
       ))}
       <FollowCamera pose={local} />
+      <PoopMarks />
     </>
   )
 }

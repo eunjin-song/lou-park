@@ -21,17 +21,25 @@ export function useKeyboard() {
       keys.current.clear()
     }
 
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') clear()
+    }
+
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', clear)
+    window.addEventListener('pagehide', clear)
     window.addEventListener('park-input-reset', clear)
     window.addEventListener('focusin', clear)
+    document.addEventListener('visibilitychange', onHide)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', clear)
+      window.removeEventListener('pagehide', clear)
       window.removeEventListener('park-input-reset', clear)
       window.removeEventListener('focusin', clear)
+      document.removeEventListener('visibilitychange', onHide)
     }
   }, [])
 

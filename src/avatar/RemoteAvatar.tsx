@@ -33,6 +33,8 @@ function easePose(pose: MutablePose, dog: DogPose, next: NetPlayer, dt: number) 
     dog.yaw = dampAngle(dog.yaw, next.dogYaw, FOLLOW, dt)
   }
   pose.moving = next.moving
+  pose.resting = next.resting
+  pose.dogPlaying = next.dogPlaying
   dog.moving = next.dogMoving
 }
 
@@ -52,6 +54,8 @@ export function RemoteAvatar({
     z: player.z,
     yaw: player.yaw,
     moving: player.moving,
+    resting: player.resting,
+    dogPlaying: player.dogPlaying,
   }))
   const [dog] = useState<DogPose>(() => ({
     x: player.dogX,

@@ -1,4 +1,5 @@
 import type { MoveInput } from '../game/types.ts'
+import { readStick } from './stick.ts'
 
 const FORWARD_KEYS = ['KeyW', 'ArrowUp']
 const BACK_KEYS = ['KeyS', 'ArrowDown']
@@ -14,6 +15,13 @@ export function readMoveInput(keys: ReadonlySet<string>): MoveInput {
     forward: held(keys, FORWARD_KEYS) - held(keys, BACK_KEYS),
     strafe: held(keys, RIGHT_KEYS) - held(keys, LEFT_KEYS),
   }
+}
+
+/** The stick wins while it is out of the deadzone. Keyboard diagonal speed stays capped. */
+export function readMovement(keys: ReadonlySet<string>): MoveInput {
+  const stick = readStick()
+  if (Math.hypot(stick.forward, stick.strafe) > 0) return stick
+  return readMoveInput(keys)
 }
 
 export function isMoveKey(code: string): boolean {

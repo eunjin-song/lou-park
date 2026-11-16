@@ -5,6 +5,7 @@ export type LabelAnchor = {
   nickname: string
   self: boolean
   bubble: string | null
+  status: string | null
   x: number
   y: number
   z: number
@@ -15,6 +16,7 @@ export type LabelView = {
   nickname: string
   self: boolean
   bubble: string | null
+  status: string | null
 }
 
 const anchors = new Map<string, LabelAnchor>()
@@ -23,8 +25,8 @@ let camera: Camera | null = null
 let snapshot: LabelView[] = []
 const listeners = new Set<() => void>()
 
-function contentKey(anchor: Pick<LabelAnchor, 'nickname' | 'self' | 'bubble'>): string {
-  return `${anchor.self ? '1' : '0'}\n${anchor.nickname}\n${anchor.bubble ?? ''}`
+function contentKey(anchor: Pick<LabelAnchor, 'nickname' | 'self' | 'bubble' | 'status'>): string {
+  return `${anchor.self ? '1' : '0'}\n${anchor.nickname}\n${anchor.bubble ?? ''}\n${anchor.status ?? ''}`
 }
 
 function publish() {
@@ -33,6 +35,7 @@ function publish() {
     nickname: anchor.nickname,
     self: anchor.self,
     bubble: anchor.bubble,
+    status: anchor.status,
   }))
   for (const listener of listeners) listener()
 }
@@ -67,6 +70,7 @@ export function syncLabel(next: LabelAnchor) {
   current.nickname = next.nickname
   current.self = next.self
   current.bubble = next.bubble
+  current.status = next.status
   current.x = next.x
   current.y = next.y
   current.z = next.z

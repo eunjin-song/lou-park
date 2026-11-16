@@ -33,10 +33,19 @@ export type NetPose = {
   z: number
   yaw: number
   moving: boolean
+  resting: boolean
   dogX: number
   dogZ: number
   dogYaw: number
   dogMoving: boolean
+  dogPlaying: boolean
+}
+
+export type ParkPoop = {
+  id: string
+  ownerId: string
+  x: number
+  z: number
 }
 
 export type NetPlayer = NetPose & {
@@ -48,16 +57,23 @@ export type ClientStateMessage = NetPose & {
   type: 'state'
 }
 
-export type ClientMessage = ClientStateMessage | { type: 'hello'; nickname: string } | { type: 'chat'; text: string }
+export type ClientMessage =
+  | ClientStateMessage
+  | { type: 'hello'; nickname: string }
+  | { type: 'chat'; text: string }
+  | { type: 'scoop' }
+  | { type: 'bin' }
 
 export type ServerMessage =
   | { type: 'chat'; id: string; text: string }
   | { type: 'error'; message: string }
-  | { type: 'welcome'; id: string; spawn: NetPose; players: NetPlayer[] }
+  | { type: 'welcome'; id: string; spawn: NetPose; players: NetPlayer[]; poops: ParkPoop[]; holding: boolean }
   | { type: 'join'; player: NetPlayer }
   | { type: 'state'; player: NetPlayer }
   | { type: 'leave'; id: string }
   | { type: 'full' }
+  | { type: 'poops'; poops: ParkPoop[] }
+  | { type: 'bag'; holding: boolean }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -97,7 +113,9 @@ export function readPose(value: Record<string, unknown>): NetPose | null {
     dogZ === null ||
     dogYaw === null ||
     typeof value.moving !== 'boolean' ||
+    typeof value.resting !== 'boolean' ||
     typeof value.dogMoving !== 'boolean' ||
+    typeof value.dogPlaying !== 'boolean' ||
     !insidePark(x, z) ||
     !insidePark(dogX, dogZ)
   ) {
@@ -108,11 +126,36 @@ export function readPose(value: Record<string, unknown>): NetPose | null {
     z,
     yaw,
     moving: value.moving,
+    resting: value.resting,
     dogX,
     dogZ,
     dogYaw,
     dogMoving: value.dogMoving,
+    dogPlaying: value.dogPlaying,
   }
+}
+
+function readPoop(value: unknown): ParkPoop | null {
+  if (!isRecord(value)) return null
+  const id = readId(value.id)
+  const ownerId = readId(value.ownerId)
+  const x = readFinite(value.x)
+  const z = readFinite(value.z)
+  if (!id || !ownerId || x === null || z === null || !insidePark(x, z)) return null
+  return { id, ownerId, x, z }
+}
+
+function readPoops(value: unknown): ParkPoop[] | null {
+  if (!Array.isArray(value) || value.length > MAX_PLAYERS) return null
+  const poops: ParkPoop[] = []
+  const seen = new Set<string>()
+  for (const entry of value) {
+    const poop = readPoop(entry)
+    if (!poop || seen.has(poop.id)) return null
+    seen.add(poop.id)
+    poops.push(poop)
+  }
+  return poops
 }
 
 export function readClientMessage(raw: string): ClientMessage | null {
@@ -132,6 +175,8 @@ export function readClientMessage(raw: string): ClientMessage | null {
     const text = readChat(data.text)
     return text ? { type: 'chat', text } : null
   }
+  if (data.type === 'scoop') return { type: 'scoop' }
+  if (data.type === 'bin') return { type: 'bin' }
   if (data.type !== 'state') return null
   const pose = readPose(data)
   if (!pose) return null
@@ -177,18 +222,29 @@ export function readServerMessage(raw: string): ServerMessage | null {
     return player ? { type: data.type, player } : null
   }
 
+  if (data.type === 'poops') {
+    const poops = readPoops(data.poops)
+    return poops ? { type: 'poops', poops } : null
+  }
+
+  if (data.type === 'bag') {
+    return typeof data.holding === 'boolean' ? { type: 'bag', holding: data.holding } : null
+  }
+
   if (data.type === 'welcome') {
     const id = readId(data.id)
     if (!id || !isRecord(data.spawn) || !Array.isArray(data.players)) return null
     const spawn = readPose(data.spawn)
-    if (!spawn || data.players.length > MAX_PLAYERS) return null
+    const poops = data.poops === undefined ? [] : readPoops(data.poops)
+    if (!spawn || !poops || data.players.length > MAX_PLAYERS) return null
+    if (data.holding !== undefined && typeof data.holding !== 'boolean') return null
     const players: NetPlayer[] = []
     for (const entry of data.players) {
       const player = readPlayer(entry)
       if (!player || player.id === id) return null
       players.push(player)
     }
-    return { type: 'welcome', id, spawn, players }
+    return { type: 'welcome', id, spawn, players, poops, holding: data.holding === true }
   }
 
   return null

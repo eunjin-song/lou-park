@@ -82,6 +82,7 @@ export function AvatarLabels() {
             {label.nickname}
             {label.self ? ' (나)' : ''}
           </div>
+          {label.status && <div className="avatar-status">{label.status}</div>}
         </div>
       ))}
     </div>
