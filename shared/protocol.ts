@@ -1,9 +1,11 @@
+import { inWater } from './places.ts'
+
 /** Messages shared by the park server and the browser. No rendering, no sockets. */
 
 export const PARK_WS_PORT = 8787
 export const PARK_WS_PATH = '/park'
 export const MAX_PLAYERS = 10
-export const PLAY_RADIUS_LIMIT = 27.65
+export const PLAY_RADIUS_LIMIT = 55.45
 export const MIN_STATE_INTERVAL_MS = 50
 export const MAX_CLIENT_MESSAGE_CHARS = 2048
 export const MAX_SERVER_MESSAGE_CHARS = 12000
@@ -57,23 +59,26 @@ export type ClientStateMessage = NetPose & {
   type: 'state'
 }
 
+export type BagCarry = { clean: boolean; used: boolean }
+
 export type ClientMessage =
   | ClientStateMessage
   | { type: 'hello'; nickname: string }
   | { type: 'chat'; text: string }
   | { type: 'scoop' }
   | { type: 'bin' }
+  | { type: 'draw' }
 
 export type ServerMessage =
   | { type: 'chat'; id: string; text: string }
   | { type: 'error'; message: string }
-  | { type: 'welcome'; id: string; spawn: NetPose; players: NetPlayer[]; poops: ParkPoop[]; holding: boolean }
+  | { type: 'welcome'; id: string; spawn: NetPose; players: NetPlayer[]; poops: ParkPoop[] } & BagCarry
   | { type: 'join'; player: NetPlayer }
   | { type: 'state'; player: NetPlayer }
   | { type: 'leave'; id: string }
   | { type: 'full' }
   | { type: 'poops'; poops: ParkPoop[] }
-  | { type: 'bag'; holding: boolean }
+  | ({ type: 'bag' } & BagCarry)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -95,7 +100,7 @@ function readYaw(value: unknown): number | null {
 }
 
 function insidePark(x: number, z: number): boolean {
-  return Math.hypot(x, z) <= PLAY_RADIUS_LIMIT
+  return Math.hypot(x, z) <= PLAY_RADIUS_LIMIT && !inWater(x, z)
 }
 
 export function readPose(value: Record<string, unknown>): NetPose | null {
@@ -177,10 +182,17 @@ export function readClientMessage(raw: string): ClientMessage | null {
   }
   if (data.type === 'scoop') return { type: 'scoop' }
   if (data.type === 'bin') return { type: 'bin' }
+  if (data.type === 'draw') return { type: 'draw' }
   if (data.type !== 'state') return null
   const pose = readPose(data)
   if (!pose) return null
   return { type: 'state', ...pose }
+}
+
+function readBag(value: Record<string, unknown>): BagCarry | null {
+  if (typeof value.clean !== 'boolean' || typeof value.used !== 'boolean') return null
+  if (value.clean && value.used) return null
+  return { clean: value.clean, used: value.used }
 }
 
 function readPlayer(value: unknown): NetPlayer | null {
@@ -228,7 +240,8 @@ export function readServerMessage(raw: string): ServerMessage | null {
   }
 
   if (data.type === 'bag') {
-    return typeof data.holding === 'boolean' ? { type: 'bag', holding: data.holding } : null
+    const bag = readBag(data)
+    return bag ? { type: 'bag', ...bag } : null
   }
 
   if (data.type === 'welcome') {
@@ -236,15 +249,15 @@ export function readServerMessage(raw: string): ServerMessage | null {
     if (!id || !isRecord(data.spawn) || !Array.isArray(data.players)) return null
     const spawn = readPose(data.spawn)
     const poops = data.poops === undefined ? [] : readPoops(data.poops)
-    if (!spawn || !poops || data.players.length > MAX_PLAYERS) return null
-    if (data.holding !== undefined && typeof data.holding !== 'boolean') return null
+    const bag = readBag(data)
+    if (!spawn || !poops || !bag || data.players.length > MAX_PLAYERS) return null
     const players: NetPlayer[] = []
     for (const entry of data.players) {
       const player = readPlayer(entry)
       if (!player || player.id === id) return null
       players.push(player)
     }
-    return { type: 'welcome', id, spawn, players, poops, holding: data.holding === true }
+    return { type: 'welcome', id, spawn, players, poops, clean: bag.clean, used: bag.used }
   }
 
   return null

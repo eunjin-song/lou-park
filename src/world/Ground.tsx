@@ -5,7 +5,7 @@ export function Ground() {
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
-        <circleGeometry args={[72, 72]} />
+        <circleGeometry args={[96, 64]} />
         <meshStandardMaterial color={palette.meadow} roughness={1} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>

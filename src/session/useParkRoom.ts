@@ -158,6 +158,10 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
         if (!socket || socket.readyState !== WebSocket.OPEN || !netId) return
         socket.send(JSON.stringify({ type: 'bin' }))
       },
+      draw: () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN || !netId) return
+        socket.send(JSON.stringify({ type: 'draw' }))
+      },
     })
 
     const connect = () => {
@@ -172,7 +176,11 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
         if (typeof event.data !== 'string') return
         const message = readServerMessage(event.data)
         if (!message) return
-        if (message.type === 'error') { publishChatError(message.message); return }
+        if (message.type === 'error') {
+          publishChatError(message.message)
+          if (message.message.includes('봉투')) publishFeed({ hint: message.message })
+          return
+        }
         if (message.type === 'chat') {
           if (message.id === netId || targets.current.has(message.id)) {
             setBubbles(current => ({ ...current, [message.id]: { text: message.text, expiresAt: Date.now() + CHAT_DURATION_MS } }))
@@ -207,7 +215,7 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
             }
           }
           replaceRoster(message.players)
-          publishFeed({ poops: message.poops, selfId: message.id, holding: message.holding })
+          publishFeed({ poops: message.poops, selfId: message.id, clean: message.clean, used: message.used, hint: '' })
           sendState(true)
           return
         }
@@ -216,7 +224,7 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
           return
         }
         if (message.type === 'bag') {
-          publishFeed({ holding: message.holding })
+          publishFeed({ clean: message.clean, used: message.used, hint: '' })
           return
         }
         if (message.type === 'join' || message.type === 'state') {
@@ -237,7 +245,7 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
         netId = null
         setSelfId('')
         setBubbles({})
-        publishFeed({ poops: [], selfId: '', holding: false })
+        publishFeed({ poops: [], selfId: '', clean: false, used: false, hint: '' })
         lastSent = null
         targets.current.clear()
         setRoster([])
@@ -261,8 +269,8 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
       send.current = () => {}
       chatSender.current = () => false
       bindChatSender(() => false)
-      bindTidy({ scoop: () => {}, bin: () => {} })
-      publishFeed({ poops: [], selfId: '', holding: false })
+      bindTidy({ scoop: () => {}, bin: () => {}, draw: () => {} })
+      publishFeed({ poops: [], selfId: '', clean: false, used: false, hint: '' })
       window.clearTimeout(reconnectTimer)
       socket?.close()
     }

@@ -1,6 +1,6 @@
 import { PLAY_GATE, PLAY_GATE_DIR, PLAYGROUND } from '../../shared/places.ts'
-import { DOG_FOLLOW_DISTANCE, DOG_SIDE_OFFSET, DOG_SPEED, PLAY_RADIUS } from '../game/constants.ts'
-import { clampToRadius, dampAngle } from '../game/movement.ts'
+import { DOG_FOLLOW_DISTANCE, DOG_SIDE_OFFSET, DOG_SPEED } from '../game/constants.ts'
+import { dampAngle, resolveStep } from '../game/movement.ts'
 
 export type DogPose = {
   x: number
@@ -52,9 +52,9 @@ export function integrateDog(
     dog.yaw = dampAngle(dog.yaw, owner.yaw, 6, dt)
   }
 
-  const clamped = clampToRadius(dog.x, dog.z, PLAY_RADIUS)
-  dog.x = clamped.x
-  dog.z = clamped.z
+  const resolved = resolveStep(startX, startZ, dog.x, dog.z)
+  dog.x = resolved.x
+  dog.z = resolved.z
   dog.moving = Math.hypot(dog.x - startX, dog.z - startZ) > 0.004
 }
 
@@ -80,6 +80,8 @@ function pickPlayTarget(wander: PlayWander) {
 /** Walks to the gate without crossing the fence, then wanders inside it. */
 export function integratePlay(dog: DogPose, wander: PlayWander, dt: number) {
   const step = Math.min(dt, 0.05)
+  const startX = dog.x
+  const startZ = dog.z
   const fromCenter = Math.hypot(dog.x - PLAYGROUND.x, dog.z - PLAYGROUND.z)
   const gateAngle = Math.atan2(PLAY_GATE_DIR.x, PLAY_GATE_DIR.z)
 
@@ -134,7 +136,7 @@ export function integratePlay(dog: DogPose, wander: PlayWander, dt: number) {
     }
   }
 
-  const parked = clampToRadius(dog.x, dog.z, PLAY_RADIUS)
+  const parked = resolveStep(startX, startZ, dog.x, dog.z)
   dog.x = parked.x
   dog.z = parked.z
 }

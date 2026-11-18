@@ -1,3 +1,4 @@
+import { blockedGround } from '../../shared/places.ts'
 import { MOVE_SPEED, PLAY_RADIUS } from './constants.ts'
 import type { MoveInput, MutablePose } from './types.ts'
 
@@ -83,6 +84,17 @@ export function updateFlatBasis(
   basis.rightZ = nextRightZ
 }
 
+/** Keeps a step inside the park and out of water, fences, and facility posts. */
+export function resolveStep(fromX: number, fromZ: number, toX: number, toZ: number): { x: number; z: number } {
+  const park = clampToRadius(toX, toZ, PLAY_RADIUS)
+  if (!blockedGround(park.x, park.z)) return park
+  const xOnly = clampToRadius(toX, fromZ, PLAY_RADIUS)
+  if (!blockedGround(xOnly.x, xOnly.z)) return xOnly
+  const zOnly = clampToRadius(fromX, toZ, PLAY_RADIUS)
+  if (!blockedGround(zOnly.x, zOnly.z)) return zOnly
+  return { x: fromX, z: fromZ }
+}
+
 /** Steps a pose in place from one input sample and the current camera basis. */
 export function integrateMovement(
   pose: MutablePose,
@@ -97,13 +109,17 @@ export function integrateMovement(
   if (moving) {
     x /= magnitude
     z /= magnitude
-    pose.x += x * MOVE_SPEED * dt
-    pose.z += z * MOVE_SPEED * dt
-    pose.yaw = Math.atan2(x, z)
+    const next = resolveStep(pose.x, pose.z, pose.x + x * MOVE_SPEED * dt, pose.z + z * MOVE_SPEED * dt)
+    const moved = Math.hypot(next.x - pose.x, next.z - pose.z) > 0.0008
+    pose.x = next.x
+    pose.z = next.z
+    if (moved) pose.yaw = Math.atan2(x, z)
+    pose.moving = moved
+    return
   }
 
   const clamped = clampToRadius(pose.x, pose.z, PLAY_RADIUS)
   pose.x = clamped.x
   pose.z = clamped.z
-  pose.moving = moving
+  pose.moving = false
 }

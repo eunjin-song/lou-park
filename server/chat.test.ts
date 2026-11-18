@@ -52,7 +52,7 @@ try {
   await delay(100)
   assert.equal(b.messages.filter(m => m.type === 'chat').length, 3)
   assert.equal(b.messages.filter(m => m.type === 'state').length, 0)
-  a.ws.send(JSON.stringify({ type: 'state', ...welcome.players[0], x: 1, z: 1 }))
+  a.ws.send(JSON.stringify({ type: 'state', ...welcome.players[0], x: 0, z: 44 }))
   await until(() => b.messages.some(m => m.type === 'state'))
   assert.equal(b.messages.find(m => m.type === 'state').player.nickname, '산책가')
   for (let i = 2; i < 10; i++) {

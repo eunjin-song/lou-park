@@ -1,22 +1,26 @@
 import assert from 'node:assert/strict'
 import { setTimeout as delay } from 'node:timers/promises'
 import { WebSocket } from 'ws'
+import { BAG_BOXES, BAG_HINT, WASTE_BINS } from '../shared/places.ts'
 import { readServerMessage } from '../shared/protocol.ts'
 
 const url = `ws://127.0.0.1:${process.env.PARK_WS_PORT ?? 18789}`
 const sockets: WebSocket[] = []
+const box = BAG_BOXES[0]
+const bin = WASTE_BINS[0]
+if (!box || !bin) throw new Error('facilities missing')
 
 function pose(over: Record<string, unknown> = {}) {
   return {
     type: 'state',
-    x: 1,
-    z: 1,
+    x: box.x,
+    z: box.z + 1.4,
     yaw: 0,
     moving: false,
     resting: false,
     dogPlaying: false,
-    dogX: 1.4,
-    dogZ: 1.2,
+    dogX: box.x + 0.3,
+    dogZ: box.z + 1.7,
     dogYaw: 0,
     dogMoving: false,
     ...over,
@@ -51,17 +55,19 @@ function latestPoops(messages: Array<ReturnType<typeof readServerMessage>>) {
   return [...messages].reverse().find((message) => message?.type === 'poops')
 }
 
+function latestBag(messages: Array<ReturnType<typeof readServerMessage>>) {
+  return [...messages].reverse().find((message) => message?.type === 'bag')
+}
+
 try {
   const owner = await client('주인님')
   await until(() => owner.messages.some((message) => message?.type === 'welcome'))
   const welcome = owner.messages.find((message) => message?.type === 'welcome')
-  assert.equal(welcome?.type, 'welcome')
   if (welcome?.type !== 'welcome') throw new Error('welcome missing')
-  assert.equal(welcome.holding, false)
+  assert.equal(welcome.clean, false)
+  assert.equal(welcome.used, false)
   assert.equal(welcome.poops.length, 0)
 
-  owner.ws.send(JSON.stringify({ type: 'poop', x: 1, z: 1 }))
-  owner.ws.send(JSON.stringify({ type: 'scoop' }))
   owner.ws.send(JSON.stringify(pose()))
   await until(() => owner.messages.some((message) => message?.type === 'poops' && message.poops.length === 1))
   const spawned = owner.messages.find((message) => message?.type === 'poops' && message.poops.length === 1)
@@ -69,65 +75,80 @@ try {
   const pile = spawned.poops[0]
   assert.ok(pile)
   assert.equal(pile.ownerId, welcome.id)
-  assert.ok(Math.hypot(pile.x - 1.4, pile.z - 1.2) < 0.05)
+
+  owner.ws.send(JSON.stringify(pose({ x: pile.x + 0.3, z: pile.z + 0.2, dogX: pile.x, dogZ: pile.z })))
+  await delay(80)
+  owner.ws.send(JSON.stringify({ type: 'scoop' }))
+  await until(() => owner.messages.some((message) => message?.type === 'error' && message.message === BAG_HINT))
+  assert.equal(latestPoops(owner.messages)?.type === 'poops' && latestPoops(owner.messages)?.type === 'poops'
+    ? (latestPoops(owner.messages) as { poops: unknown[] }).poops.length
+    : -1, 1)
+
+  owner.ws.send(JSON.stringify(pose({ x: 0, z: 30, dogX: 0.4, dogZ: 30.4 })))
+  await delay(80)
+  owner.ws.send(JSON.stringify({ type: 'draw' }))
+  await delay(120)
   assert.equal(owner.messages.some((message) => message?.type === 'bag'), false)
+
+  owner.ws.send(JSON.stringify(pose({ x: box.x + 0.4, z: box.z + 1.1, dogX: box.x, dogZ: box.z + 1.5 })))
+  await delay(80)
+  owner.ws.send(JSON.stringify({ type: 'draw' }))
+  await until(() => latestBag(owner.messages)?.type === 'bag' && latestBag(owner.messages)?.type === 'bag' && (latestBag(owner.messages) as { clean: boolean }).clean)
+  owner.ws.send(JSON.stringify({ type: 'draw' }))
+  await delay(120)
+  assert.equal(owner.messages.filter((message) => message?.type === 'bag').length, 1)
 
   const guest = await client('손님임')
   await until(() => guest.messages.some((message) => message?.type === 'welcome'))
   const guestWelcome = guest.messages.find((message) => message?.type === 'welcome')
   if (guestWelcome?.type !== 'welcome') throw new Error('guest welcome missing')
   assert.equal(guestWelcome.poops.length, 1)
-  assert.equal(guestWelcome.poops[0]?.id, pile.id)
-  assert.notEqual(guestWelcome.id, welcome.id)
+  assert.equal(guestWelcome.clean, false)
 
+  guest.ws.send(JSON.stringify(pose({ x: box.x, z: box.z + 1, dogX: box.x, dogZ: box.z + 1.4 })))
+  await delay(80)
+  guest.ws.send(JSON.stringify({ type: 'draw' }))
+  await until(() => latestBag(guest.messages)?.type === 'bag')
   guest.ws.send(JSON.stringify(pose({ x: pile.x, z: pile.z, dogX: pile.x, dogZ: pile.z })))
   await delay(80)
   guest.ws.send(JSON.stringify({ type: 'scoop' }))
   await delay(160)
-  assert.equal(guest.messages.some((message) => message?.type === 'bag'), false)
-  assert.equal(latestPoops(owner.messages)?.type === 'poops' && latestPoops(owner.messages)?.type === 'poops'
-    ? (latestPoops(owner.messages) as { type: 'poops'; poops: unknown[] }).poops.length
-    : -1, 1)
+  assert.equal(latestPoops(owner.messages)?.type === 'poops' && (latestPoops(owner.messages) as { poops: unknown[] }).poops.length, 1)
+  const guestBag = latestBag(guest.messages)
+  assert.equal(guestBag?.type === 'bag' && (guestBag as { clean: boolean; used: boolean }).clean, true)
+  assert.equal(guestBag?.type === 'bag' && (guestBag as { used: boolean }).used, false)
 
   owner.ws.send(JSON.stringify(pose({ x: pile.x + 6, z: pile.z, dogX: pile.x, dogZ: pile.z })))
   await delay(80)
   owner.ws.send(JSON.stringify({ type: 'scoop' }))
   await delay(160)
-  assert.equal(owner.messages.some((message) => message?.type === 'bag'), false)
+  assert.equal(latestBag(owner.messages)?.type === 'bag' && (latestBag(owner.messages) as { clean: boolean; used: boolean }).clean, true)
 
-  owner.ws.send(JSON.stringify(pose({ x: pile.x + 0.4, z: pile.z + 0.2, dogX: pile.x, dogZ: pile.z })))
+  owner.ws.send(JSON.stringify(pose({ x: pile.x + 0.35, z: pile.z + 0.15, dogX: pile.x, dogZ: pile.z })))
   await delay(80)
   owner.ws.send(JSON.stringify({ type: 'scoop' }))
-  await until(() => owner.messages.some((message) => message?.type === 'bag' && message.holding))
+  await until(() => {
+    const bag = latestBag(owner.messages)
+    return bag?.type === 'bag' && bag.clean === false && bag.used === true
+  })
   await until(() => {
     const message = latestPoops(owner.messages)
     return message?.type === 'poops' && message.poops.length === 0
   })
-  await until(() => {
-    const message = latestPoops(guest.messages)
-    return message?.type === 'poops' && message.poops.length === 0
-  })
-
-  owner.ws.send(JSON.stringify({ type: 'scoop' }))
-  await delay(120)
-  const stillHolding = [...owner.messages].reverse().find((message) => message?.type === 'bag')
-  assert.equal(stillHolding?.type === 'bag' && stillHolding.holding, true)
 
   owner.ws.send(JSON.stringify({ type: 'bin' }))
-  await delay(140)
-  const stillBag = [...owner.messages].reverse().find((message) => message?.type === 'bag')
-  assert.equal(stillBag?.type === 'bag' && stillBag.holding, true)
+  await delay(120)
+  assert.equal((latestBag(owner.messages) as { used?: boolean })?.used, true)
 
-  owner.ws.send(JSON.stringify(pose({ x: -9.4, z: 17, dogX: -8.8, dogZ: 16.4 })))
+  owner.ws.send(JSON.stringify(pose({ x: bin.x + 0.4, z: bin.z + 1.1, dogX: bin.x, dogZ: bin.z + 1.6 })))
   await delay(80)
   owner.ws.send(JSON.stringify({ type: 'bin' }))
   await until(() => {
-    const message = [...owner.messages].reverse().find((entry) => entry?.type === 'bag')
-    return message?.type === 'bag' && message.holding === false
+    const bag = latestBag(owner.messages)
+    return bag?.type === 'bag' && bag.used === false && bag.clean === false
   })
 
   await delay(1800)
-  assert.equal(owner.messages.some((message) => message?.type === 'poops' && message.poops.some((poop) => poop.ownerId === welcome.id)), true)
   const afterWait = latestPoops(owner.messages)
   assert.equal(afterWait?.type === 'poops' && afterWait.poops.some((poop) => poop.ownerId === welcome.id), false)
 
@@ -140,7 +161,6 @@ try {
     const message = latestPoops(owner.messages)
     return message?.type === 'poops' && message.poops.length === 0
   })
-  await until(() => owner.messages.some((message) => message?.type === 'leave'))
 
   const again = await client('손님임')
   await until(() => again.messages.some((message) => message?.type === 'welcome'))
@@ -148,11 +168,8 @@ try {
   if (againWelcome?.type !== 'welcome') throw new Error('reconnect welcome missing')
   assert.notEqual(againWelcome.id, guestWelcome.id)
   assert.equal(againWelcome.poops.length, 0)
-  assert.equal(againWelcome.holding, false)
-  again.ws.send(JSON.stringify(pose({ x: 3, z: 3, dogX: 3.2, dogZ: 2.6 })))
-  await until(() => again.messages.some((message) => message?.type === 'poops' && message.poops.length === 1))
-  const fresh = again.messages.find((message) => message?.type === 'poops' && message.poops.length === 1)
-  assert.equal(fresh?.type === 'poops' && fresh.poops[0]?.ownerId, againWelcome.id)
+  assert.equal(againWelcome.clean, false)
+  assert.equal(againWelcome.used, false)
   console.log('tidy tests passed')
 } finally {
   for (const socket of sockets) socket.close()

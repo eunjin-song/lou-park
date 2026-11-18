@@ -4,8 +4,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, type RawData, type WebSocket } from 'ws'
-import { BIN_USE_RADIUS, POOP_DELAY_MS, POOP_PICKUP_RADIUS, WASTE_BIN } from '../shared/places.ts'
-import { DOG_FOLLOW_DISTANCE, DOG_SIDE_OFFSET, SPAWN_YAW, SPAWN_Z } from '../src/game/constants.ts'
+import { BAG_HINT, BAG_USE_RADIUS, BAG_BOXES, BIN_USE_RADIUS, PLAZA, POOP_DELAY_MS, POOP_PICKUP_RADIUS, SPAWN_RING, WASTE_BINS, nearAny } from '../shared/places.ts'
+import { DOG_FOLLOW_DISTANCE, DOG_SIDE_OFFSET, SPAWN_YAW } from '../src/game/constants.ts'
 import {
   CHAT_INTERVAL_MS,
   MAX_INVALID_MESSAGES,
@@ -32,7 +32,8 @@ type Visitor = {
   joinedAt: number
   spawnedPoop: boolean
   poop: ParkPoop | null
-  holding: boolean
+  clean: boolean
+  used: boolean
 }
 
 const visitors = new Map<WebSocket, Visitor>()
@@ -42,9 +43,9 @@ const SLOT_ORDER = [0, 5, 1, 6, 2, 7, 3, 8, 4, 9]
 
 function spawnForSlot(slot: number): NetPose {
   const angle = (SLOT_ORDER[slot] / MAX_PLAYERS) * Math.PI * 2
-  const x = Math.sin(angle) * SPAWN_Z
-  const z = Math.cos(angle) * SPAWN_Z
-  const yaw = Math.atan2(Math.sin(angle + SPAWN_YAW), Math.cos(angle + SPAWN_YAW))
+  const x = PLAZA.x + Math.sin(angle) * SPAWN_RING
+  const z = PLAZA.z + Math.cos(angle) * SPAWN_RING
+  const yaw = Math.atan2(Math.sin(SPAWN_YAW), Math.cos(SPAWN_YAW))
   const forwardX = Math.sin(yaw)
   const forwardZ = Math.cos(yaw)
   const rightX = Math.cos(yaw)
@@ -306,7 +307,8 @@ wss.on('connection', (socket) => {
     joinedAt: 0,
     spawnedPoop: false,
     poop: null,
-    holding: false,
+    clean: false,
+    used: false,
   }
   visitors.set(socket, visitor)
   const helloTimer = setTimeout(() => { if (!visitor.joined) socket.close(1008, 'hello timeout') }, 5000)
@@ -330,7 +332,7 @@ wss.on('connection', (socket) => {
           visitor.joinedAt = Date.now()
           clearTimeout(helloTimer)
           const alreadyHere = [...visitors.values()].filter(v => v.joined && v !== visitor).map(v => v.pose)
-          send(socket, { type: 'welcome', id, spawn, players: alreadyHere, poops: listPoops(), holding: false })
+          send(socket, { type: 'welcome', id, spawn, players: alreadyHere, poops: listPoops(), clean: false, used: false })
           broadcast({ type: 'join', player: visitor.pose }, socket)
           return
         }
@@ -348,21 +350,33 @@ wss.on('connection', (socket) => {
           broadcast({ type: 'chat', id: visitor.id, text: message.text })
           return
         }
+        if (message.type === 'draw') {
+          if (visitor.clean || visitor.used) return
+          if (!nearAny(visitor.pose.x, visitor.pose.z, BAG_BOXES, BAG_USE_RADIUS)) return
+          visitor.clean = true
+          send(socket, { type: 'bag', clean: true, used: false })
+          return
+        }
         if (message.type === 'scoop') {
           const pile = visitor.poop
-          if (!pile || visitor.holding) return
+          if (!pile || visitor.used) return
+          if (!visitor.clean) {
+            send(socket, { type: 'error', message: BAG_HINT })
+            return
+          }
           if (Math.hypot(visitor.pose.x - pile.x, visitor.pose.z - pile.z) > POOP_PICKUP_RADIUS) return
           visitor.poop = null
-          visitor.holding = true
+          visitor.clean = false
+          visitor.used = true
           broadcast({ type: 'poops', poops: listPoops() })
-          send(socket, { type: 'bag', holding: true })
+          send(socket, { type: 'bag', clean: false, used: true })
           return
         }
         if (message.type === 'bin') {
-          if (!visitor.holding) return
-          if (Math.hypot(visitor.pose.x - WASTE_BIN.x, visitor.pose.z - WASTE_BIN.z) > BIN_USE_RADIUS) return
-          visitor.holding = false
-          send(socket, { type: 'bag', holding: false })
+          if (!visitor.used) return
+          if (!nearAny(visitor.pose.x, visitor.pose.z, WASTE_BINS, BIN_USE_RADIUS)) return
+          visitor.used = false
+          send(socket, { type: 'bag', clean: false, used: false })
           return
         }
         if (message.type !== 'state') return

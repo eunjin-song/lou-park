@@ -2,7 +2,7 @@ import { BackSide, BufferAttribute, Color, SphereGeometry } from 'three'
 import { palette } from '../game/constants.ts'
 
 function createSkyGeometry(): SphereGeometry {
-  const geometry = new SphereGeometry(150, 28, 18)
+  const geometry = new SphereGeometry(240, 28, 18)
   const position = geometry.attributes.position
   if (!position) {
     return geometry
@@ -12,7 +12,7 @@ function createSkyGeometry(): SphereGeometry {
   const horizon = new Color(palette.skyHorizon)
   const scratch = new Color()
   for (let index = 0; index < position.count; index += 1) {
-    const height = Math.min(Math.max(position.getY(index) / 150, 0), 1)
+    const height = Math.min(Math.max(position.getY(index) / 240, 0), 1)
     scratch.copy(horizon).lerp(top, height)
     colors[index * 3] = scratch.r
     colors[index * 3 + 1] = scratch.g

@@ -1,6 +1,6 @@
 /** Shared tuneables. Gameplay and visuals read the same boundary so they cannot drift. */
-export const PLAY_RADIUS = 27.6
-export const FENCE_RADIUS = 29.2
+export const PLAY_RADIUS = 55.2
+export const FENCE_RADIUS = 57.6
 export const PATH_INNER = 10.8
 export const PATH_OUTER = 14.6
 
@@ -10,7 +10,7 @@ export const DOG_SIDE_OFFSET = 0.48
 export const DOG_SPEED = 5.6
 
 export const SPAWN_X = 0
-export const SPAWN_Z = 12.7
+export const SPAWN_Z = 46.6
 export const SPAWN_YAW = Math.PI
 
 export const CAMERA_OFFSET = { x: 0, y: 11, z: 13 }
@@ -18,7 +18,7 @@ export const CAMERA_FOV = 40
 export const CAMERA_LOOK_Y = 1.15
 export const CAMERA_MIN_Y = 0.6
 export const CAMERA_MIN_DISTANCE = 6
-export const CAMERA_MAX_DISTANCE = 30
+export const CAMERA_MAX_DISTANCE = 46
 export const CAMERA_MAX_PITCH = 1.15
 
 export const palette = {

@@ -80,7 +80,7 @@ export function ParkScene({ nickname }: { nickname: string }) {
           }}
         >
           <color attach="background" args={[palette.skyHorizon]} />
-          <fog attach="fog" args={[palette.fog, 42, 110]} />
+          <fog attach="fog" args={[palette.fog, 70, 185]} />
           <Sky />
           <Lights />
           <Park />

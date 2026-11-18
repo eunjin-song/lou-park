@@ -4,10 +4,12 @@ import type { ParkPoop } from '../../shared/protocol.ts'
 export type WorldFeed = {
   poops: ParkPoop[]
   selfId: string
-  holding: boolean
+  clean: boolean
+  used: boolean
+  hint: string
 }
 
-let feed: WorldFeed = { poops: [], selfId: '', holding: false }
+let feed: WorldFeed = { poops: [], selfId: '', clean: false, used: false, hint: '' }
 const listeners = new Set<() => void>()
 
 function samePoops(left: readonly ParkPoop[], right: readonly ParkPoop[]) {
@@ -20,9 +22,11 @@ function samePoops(left: readonly ParkPoop[], right: readonly ParkPoop[]) {
 export function publishFeed(next: Partial<WorldFeed>) {
   const poops = next.poops ?? feed.poops
   const selfId = next.selfId ?? feed.selfId
-  const holding = next.holding ?? feed.holding
-  if (samePoops(poops, feed.poops) && selfId === feed.selfId && holding === feed.holding) return
-  feed = { poops, selfId, holding }
+  const clean = next.clean ?? feed.clean
+  const used = next.used ?? feed.used
+  const hint = next.hint ?? feed.hint
+  if (samePoops(poops, feed.poops) && selfId === feed.selfId && clean === feed.clean && used === feed.used && hint === feed.hint) return
+  feed = { poops, selfId, clean, used, hint }
   for (const listener of listeners) listener()
 }
 
