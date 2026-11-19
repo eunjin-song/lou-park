@@ -21,4 +21,5 @@ export type MoveInput = {
   forward: number
   /** 1 moves to the camera's horizontal right. -1 moves left. */
   strafe: number
+  run?: boolean
 }

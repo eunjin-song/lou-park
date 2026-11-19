@@ -1,5 +1,5 @@
-import { blockedGround } from '../../shared/places.ts'
-import { MOVE_SPEED, PLAY_RADIUS } from './constants.ts'
+import { canStand, nearestDry } from '../../shared/places.ts'
+import { MOVE_SPEED, RUN_MULTIPLIER } from './constants.ts'
 import type { MoveInput, MutablePose } from './types.ts'
 
 export function clampToRadius(x: number, z: number, radius: number): { x: number; z: number } {
@@ -84,14 +84,11 @@ export function updateFlatBasis(
   basis.rightZ = nextRightZ
 }
 
-/** Keeps a step inside the park and out of water, fences, and facility posts. */
+/** Keeps a step on land, off the water, and out of fences and facility posts. */
 export function resolveStep(fromX: number, fromZ: number, toX: number, toZ: number): { x: number; z: number } {
-  const park = clampToRadius(toX, toZ, PLAY_RADIUS)
-  if (!blockedGround(park.x, park.z)) return park
-  const xOnly = clampToRadius(toX, fromZ, PLAY_RADIUS)
-  if (!blockedGround(xOnly.x, xOnly.z)) return xOnly
-  const zOnly = clampToRadius(fromX, toZ, PLAY_RADIUS)
-  if (!blockedGround(zOnly.x, zOnly.z)) return zOnly
+  if (canStand(toX, toZ)) return { x: toX, z: toZ }
+  if (canStand(toX, fromZ)) return { x: toX, z: fromZ }
+  if (canStand(fromX, toZ)) return { x: fromX, z: toZ }
   return { x: fromX, z: fromZ }
 }
 
@@ -109,7 +106,8 @@ export function integrateMovement(
   if (moving) {
     x /= magnitude
     z /= magnitude
-    const next = resolveStep(pose.x, pose.z, pose.x + x * MOVE_SPEED * dt, pose.z + z * MOVE_SPEED * dt)
+    const pace = MOVE_SPEED * (input.run ? RUN_MULTIPLIER : 1)
+    const next = resolveStep(pose.x, pose.z, pose.x + x * pace * dt, pose.z + z * pace * dt)
     const moved = Math.hypot(next.x - pose.x, next.z - pose.z) > 0.0008
     pose.x = next.x
     pose.z = next.z
@@ -118,8 +116,10 @@ export function integrateMovement(
     return
   }
 
-  const clamped = clampToRadius(pose.x, pose.z, PLAY_RADIUS)
-  pose.x = clamped.x
-  pose.z = clamped.z
+  if (!canStand(pose.x, pose.z)) {
+    const dry = nearestDry(pose.x, pose.z)
+    pose.x = dry.x
+    pose.z = dry.z
+  }
   pose.moving = false
 }

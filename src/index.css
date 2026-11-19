@@ -125,5 +125,17 @@ button:disabled { opacity: .5; cursor: default; }
 .touch-ui .park-actions { display: flex; flex-direction: column; }
 .touch-ui .hud { top: calc(12px + env(safe-area-inset-top)); bottom: auto; left: calc(12px + env(safe-area-inset-left)); max-width: min(280px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right))); }
 .touch-ui .chat-panel { width: min(280px, calc(100vw - 156px - env(safe-area-inset-left) - env(safe-area-inset-right))); }
+.touch-ui .run-toggle { display: inline-block; }
+.park-map { position: fixed; z-index: 30; top: calc(12px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: calc(100vw - 24px); }
+.park-map-actions { display: flex; gap: 8px; }
+.park-map button, .travel-controls button, .welcome-note button { background: #fffdf8; color: #386e59; border-color: #8fbfa8; font-weight: 750; }
+.park-map canvas { width: min(420px, calc(100vw - 24px)); height: min(48vh, 420px); background: #f7f1e4; border: 1px solid #e7d3ae; border-radius: 16px; }
+.travel-controls { display: none; position: fixed; z-index: 40; }
+.run-toggle { display: none; }
+.welcome-note { position: fixed; z-index: 28; top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 180px)); display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 14px; background: #fffdf8f2; color: #34564c; }
+.welcome-note p { margin: 0; font-size: 13px; line-height: 1.4; }
+.touch-ui .welcome-note { width: min(440px, calc(100vw - 24px)); top: calc(58px + env(safe-area-inset-top)); }
+.touch-ui .travel-controls { display: flex; top: auto; bottom: calc(168px + env(safe-area-inset-bottom)); right: auto; left: calc(148px + env(safe-area-inset-left)); }
+.touch-ui .park-map { top: calc(12px + env(safe-area-inset-top)); }
 @media (max-width: 760px) { .hud { bottom: auto; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); padding: 10px; max-width: min(280px, calc(100vw - 24px)); } .hud p { font-size: 11px; } }
 @media (max-height: 520px) { .joystick { width: 96px; height: 96px; } .joystick-knob { left: 26px; top: 26px; width: 44px; height: 44px; } .park-actions { bottom: calc(120px + env(safe-area-inset-bottom)); } .hud p { font-size: 11px; } }

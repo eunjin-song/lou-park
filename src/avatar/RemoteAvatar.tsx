@@ -9,7 +9,7 @@ import { AvatarView } from './AvatarView.tsx'
 import type { DogPose } from './followDog.ts'
 
 const FOLLOW = 14
-const SNAP_DISTANCE = 8
+const SNAP_DISTANCE = 14
 
 function approach(current: number, target: number, lambda: number, dt: number): number {
   return current + (target - current) * (1 - Math.exp(-lambda * dt))

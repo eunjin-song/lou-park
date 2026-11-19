@@ -1,59 +1,33 @@
+import { useMemo } from 'react'
+import { LOOP, frameAt, type Pt } from '../../shared/shore.ts'
 import { palette } from '../game/constants.ts'
+import { ribbonGeometry } from './ribbon.ts'
 
-type PathRun = { x: number; z: number; yaw: number; length: number; width: number }
-type PathRing = { x: number; z: number; inner: number; outer: number }
-
-const runs: PathRun[] = [
-  { x: 0, z: 32.5, yaw: 0, length: 28, width: 3.4 },
-  { x: 6.2, z: 36.4, yaw: Math.atan2(6.8, 1.6), length: 9.2, width: 2.8 },
-  { x: 16, z: 6, yaw: 0, length: 18, width: 2.8 },
-  { x: -16, z: 6, yaw: 0, length: 18, width: 2.8 },
-  { x: 0, z: 18, yaw: Math.PI / 2, length: 30, width: 2.8 },
-  { x: 9, z: -12.2, yaw: Math.PI / 2, length: 10, width: 2.8 },
-  { x: -8, z: -12.2, yaw: Math.PI / 2, length: 10, width: 2.8 },
-  { x: -5.4, z: -12.6, yaw: 0, length: 5, width: 2.4 },
-  { x: -7.2, z: -18.5, yaw: Math.PI / 2, length: 6.4, width: 2.6 },
-  { x: 8.4, z: -18.5, yaw: Math.PI / 2, length: 6.4, width: 2.6 },
-  { x: 4.2, z: -26.2, yaw: 0, length: 7.2, width: 2.6 },
-]
-
-const rings: PathRing[] = [
-  { x: 4, z: -34, inner: 10.4, outer: 12.6 },
-]
-
-function Paved({ run }: { run: PathRun }) {
-  return (
-    <group position={[run.x, 0, run.z]} rotation={[0, run.yaw, 0]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
-        <planeGeometry args={[run.width + 0.55, run.length + 0.4]} />
-        <meshStandardMaterial color={palette.pathEdge} roughness={1} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.035, 0]} receiveShadow>
-        <planeGeometry args={[run.width, run.length]} />
-        <meshStandardMaterial color={palette.path} roughness={1} />
-      </mesh>
-    </group>
-  )
+function deckLine(): Pt[] {
+  const points: Pt[] = []
+  for (let distance = 150; distance <= 1260; distance += 4) {
+    const frame = frameAt(distance)
+    if (frame.nx > -0.72) continue
+    points.push({ x: frame.x - frame.nx * 11, z: frame.z - frame.nz * 11 })
+  }
+  return points
 }
 
 export function Path() {
+  const path = useMemo(() => ribbonGeometry(LOOP, 7.2, 0.035, true), [])
+  const edge = useMemo(() => ribbonGeometry(LOOP, 8.4, 0.028, true), [])
+  const deck = useMemo(() => ribbonGeometry(deckLine(), 34, 0.06, false), [])
   return (
     <group>
-      {rings.map((ring) => (
-        <group key={`${ring.x}:${ring.z}`}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ring.x, 0.02, ring.z]} receiveShadow>
-            <ringGeometry args={[ring.inner - 0.28, ring.outer + 0.28, 72]} />
-            <meshStandardMaterial color={palette.pathEdge} roughness={1} />
-          </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ring.x, 0.035, ring.z]} receiveShadow>
-            <ringGeometry args={[ring.inner, ring.outer, 72]} />
-            <meshStandardMaterial color={palette.path} roughness={1} />
-          </mesh>
-        </group>
-      ))}
-      {runs.map((run) => (
-        <Paved key={`${run.x}:${run.z}`} run={run} />
-      ))}
+      <mesh geometry={edge} receiveShadow>
+        <meshStandardMaterial color={palette.pathEdge} roughness={1} />
+      </mesh>
+      <mesh geometry={path} receiveShadow>
+        <meshStandardMaterial color={palette.path} roughness={1} />
+      </mesh>
+      <mesh geometry={deck} receiveShadow>
+        <meshStandardMaterial color={palette.benchWood} roughness={0.86} />
+      </mesh>
     </group>
   )
 }

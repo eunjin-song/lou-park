@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Vector3 } from 'three'
-import { PLAYGROUND } from '../../shared/places.ts'
-import { SPAWN_X, SPAWN_YAW, SPAWN_Z } from '../game/constants.ts'
+import { PLAYGROUND, SPAWN } from '../../shared/places.ts'
 import { INITIAL_FLAT_BASIS, integrateMovement, updateFlatBasis } from '../game/movement.ts'
 import { isInputBlocked } from '../input/inputGate.ts'
 import { bindRest, whereabouts } from '../input/parkActions.ts'
@@ -13,7 +12,7 @@ import { createPresence } from '../session/presence.ts'
 import { useParkRoom } from '../session/useParkRoom.ts'
 import { PoopMarks } from '../world/PoopMarks.tsx'
 import { AvatarView } from './AvatarView.tsx'
-import { dogTarget, type DogPose } from './followDog.ts'
+import { dogTarget, noteOwnerStep, type DogPose } from './followDog.ts'
 import { RemoteAvatar } from './RemoteAvatar.tsx'
 
 export function LocalAvatar({ nickname }: { nickname: string }) {
@@ -21,9 +20,9 @@ export function LocalAvatar({ nickname }: { nickname: string }) {
   const [presence] = useState(() =>
     createPresence({
       id: 'local',
-      x: SPAWN_X,
-      z: SPAWN_Z,
-      yaw: SPAWN_YAW,
+      x: SPAWN.x,
+      z: SPAWN.z,
+      yaw: SPAWN.yaw,
       moving: false,
       resting: false,
       dogPlaying: false,
@@ -71,6 +70,7 @@ export function LocalAvatar({ nickname }: { nickname: string }) {
       Math.min(dt, 0.05),
     )
     presence.local.dogPlaying = Math.hypot(presence.local.x - PLAYGROUND.x, presence.local.z - PLAYGROUND.z) <= PLAYGROUND.radius
+    noteOwnerStep(presence.local.x, presence.local.z)
     whereabouts.x = presence.local.x
     whereabouts.z = presence.local.z
     whereabouts.moving = presence.local.moving

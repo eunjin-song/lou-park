@@ -84,7 +84,7 @@ try {
     ? (latestPoops(owner.messages) as { poops: unknown[] }).poops.length
     : -1, 1)
 
-  owner.ws.send(JSON.stringify(pose({ x: 0, z: 30, dogX: 0.4, dogZ: 30.4 })))
+  owner.ws.send(JSON.stringify(pose({ x: box.x + 3.2, z: box.z, dogX: box.x + 3.4, dogZ: box.z + 0.3 })))
   await delay(80)
   owner.ws.send(JSON.stringify({ type: 'draw' }))
   await delay(120)
@@ -118,7 +118,7 @@ try {
   assert.equal(guestBag?.type === 'bag' && (guestBag as { clean: boolean; used: boolean }).clean, true)
   assert.equal(guestBag?.type === 'bag' && (guestBag as { used: boolean }).used, false)
 
-  owner.ws.send(JSON.stringify(pose({ x: pile.x + 6, z: pile.z, dogX: pile.x, dogZ: pile.z })))
+  owner.ws.send(JSON.stringify(pose({ x: pile.x + 3.2, z: pile.z, dogX: pile.x + 3.2, dogZ: pile.z })))
   await delay(80)
   owner.ws.send(JSON.stringify({ type: 'scoop' }))
   await delay(160)
@@ -140,6 +140,7 @@ try {
   await delay(120)
   assert.equal((latestBag(owner.messages) as { used?: boolean })?.used, true)
 
+  await delay(1200)
   owner.ws.send(JSON.stringify(pose({ x: bin.x + 0.4, z: bin.z + 1.1, dogX: bin.x, dogZ: bin.z + 1.6 })))
   await delay(80)
   owner.ws.send(JSON.stringify({ type: 'bin' }))

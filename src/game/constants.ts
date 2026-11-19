@@ -1,39 +1,35 @@
 /** Shared tuneables. Gameplay and visuals read the same boundary so they cannot drift. */
-export const PLAY_RADIUS = 55.2
-export const FENCE_RADIUS = 57.6
-export const PATH_INNER = 10.8
-export const PATH_OUTER = 14.6
-
 export const MOVE_SPEED = 5
+export const RUN_MULTIPLIER = 2.4
 export const DOG_FOLLOW_DISTANCE = 1.35
 export const DOG_SIDE_OFFSET = 0.48
 export const DOG_SPEED = 5.6
 
-export const SPAWN_X = 0
-export const SPAWN_Z = 46.6
 export const SPAWN_YAW = Math.PI
 
-export const CAMERA_OFFSET = { x: 0, y: 11, z: 13 }
+export const CAMERA_OFFSET = { x: 0, y: 7.4, z: 12.5 }
 export const CAMERA_FOV = 40
 export const CAMERA_LOOK_Y = 1.15
 export const CAMERA_MIN_Y = 0.6
 export const CAMERA_MIN_DISTANCE = 6
-export const CAMERA_MAX_DISTANCE = 46
+export const CAMERA_MAX_DISTANCE = 28
 export const CAMERA_MAX_PITCH = 1.15
 
 export const palette = {
   skyTop: '#b7e3ff',
   skyHorizon: '#fff1dc',
   fog: '#f7f1e6',
-  meadow: '#c6e4ae',
-  grass: '#8ed18a',
-  grassLight: '#b7e7a6',
-  grassDark: '#69b974',
-  path: '#f6d7b4',
-  pathEdge: '#e4bc96',
-  sand: '#f6e2c6',
-  water: '#8fd0ea',
-  waterLight: '#d7f5fc',
+  meadow: '#c5e3b0',
+  grass: '#9ed492',
+  grassLight: '#d3eeb8',
+  grassDark: '#6aaf78',
+  path: '#f4e6c8',
+  pathEdge: '#e6d2ae',
+  sand: '#f6e7cf',
+  water: '#6ec4c6',
+  waterLight: '#c9eef0',
+  wetland: '#8fbf86',
+  hill: '#b7d99a',
   trunk: '#c48b62',
   leaf: '#7dcf8e',
   leafDeep: '#5eae78',

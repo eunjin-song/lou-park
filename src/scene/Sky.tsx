@@ -1,4 +1,7 @@
+import { useFrame } from '@react-three/fiber'
+import { useRef } from 'react'
 import { BackSide, BufferAttribute, Color, SphereGeometry } from 'three'
+import type { Group } from 'three'
 import { palette } from '../game/constants.ts'
 
 function createSkyGeometry(): SphereGeometry {
@@ -51,8 +54,12 @@ function Cloud({ position, scale }: { position: readonly [number, number, number
 }
 
 export function Sky() {
+  const group = useRef<Group>(null)
+  useFrame(({ camera }) => {
+    group.current?.position.set(camera.position.x, 0, camera.position.z)
+  })
   return (
-    <group>
+    <group ref={group}>
       <mesh geometry={skyGeometry} frustumCulled={false}>
         <meshBasicMaterial vertexColors side={BackSide} depthWrite={false} fog={false} />
       </mesh>

@@ -4,8 +4,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, type RawData, type WebSocket } from 'ws'
-import { BAG_HINT, BAG_USE_RADIUS, BAG_BOXES, BIN_USE_RADIUS, PLAZA, POOP_DELAY_MS, POOP_PICKUP_RADIUS, SPAWN_RING, WASTE_BINS, nearAny } from '../shared/places.ts'
-import { DOG_FOLLOW_DISTANCE, DOG_SIDE_OFFSET, SPAWN_YAW } from '../src/game/constants.ts'
+import { BAG_HINT, BAG_USE_RADIUS, BAG_BOXES, BIN_USE_RADIUS, MOVE_LIMIT_MPS, PLAZA, POOP_DELAY_MS, POOP_PICKUP_RADIUS, SPAWN, SPAWN_RING, WASTE_BINS, nearAny, nearestDry } from '../shared/places.ts'
+import { DOG_FOLLOW_DISTANCE, DOG_SIDE_OFFSET } from '../src/game/constants.ts'
 import {
   CHAT_INTERVAL_MS,
   MAX_INVALID_MESSAGES,
@@ -13,7 +13,6 @@ import {
   MIN_STATE_INTERVAL_MS,
   PARK_WS_PATH,
   PARK_WS_PORT,
-  PLAY_RADIUS_LIMIT,
   readClientMessage,
   type NetPlayer,
   type NetPose,
@@ -45,7 +44,7 @@ function spawnForSlot(slot: number): NetPose {
   const angle = (SLOT_ORDER[slot] / MAX_PLAYERS) * Math.PI * 2
   const x = PLAZA.x + Math.sin(angle) * SPAWN_RING
   const z = PLAZA.z + Math.cos(angle) * SPAWN_RING
-  const yaw = Math.atan2(Math.sin(SPAWN_YAW), Math.cos(SPAWN_YAW))
+  const yaw = SPAWN.yaw
   const forwardX = Math.sin(yaw)
   const forwardZ = Math.cos(yaw)
   const rightX = Math.cos(yaw)
@@ -73,11 +72,8 @@ function readPoopDelay(): number {
 }
 
 function clampInside(x: number, z: number) {
-  if (!Number.isFinite(x) || !Number.isFinite(z)) return { x: 0, z: 0 }
-  const distance = Math.hypot(x, z)
-  if (distance <= PLAY_RADIUS_LIMIT) return { x, z }
-  const scale = PLAY_RADIUS_LIMIT / distance
-  return { x: x * scale, z: z * scale }
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return { x: SPAWN.x, z: SPAWN.z }
+  return nearestDry(x, z)
 }
 
 function listPoops(): ParkPoop[] {
@@ -372,6 +368,19 @@ wss.on('connection', (socket) => {
           send(socket, { type: 'bag', clean: false, used: true })
           return
         }
+        if (message.type === 'return') {
+          const home = spawnForSlot(visitor.slot)
+          visitor.pose = {
+            ...visitor.pose,
+            ...home,
+            moving: false,
+            resting: false,
+            dogPlaying: false,
+          }
+          send(socket, { type: 'place', ...home })
+          broadcast({ type: 'state', player: visitor.pose }, socket)
+          return
+        }
         if (message.type === 'bin') {
           if (!visitor.used) return
           if (!nearAny(visitor.pose.x, visitor.pose.z, WASTE_BINS, BIN_USE_RADIUS)) return
@@ -381,7 +390,26 @@ wss.on('connection', (socket) => {
         }
         if (message.type !== 'state') return
         if (now - visitor.lastStateAt < MIN_STATE_INTERVAL_MS) return
+        const elapsed = visitor.lastStateAt === 0 ? 0 : Math.min(8, (now - visitor.lastStateAt) / 1000)
+        const jumped = Math.hypot(message.x - visitor.pose.x, message.z - visitor.pose.z)
+        const dogJumped = Math.hypot(message.dogX - visitor.pose.dogX, message.dogZ - visitor.pose.dogZ)
         visitor.lastStateAt = now
+        if (elapsed > 0 && (jumped > MOVE_LIMIT_MPS * elapsed + 3 || dogJumped > MOVE_LIMIT_MPS * elapsed + 5)) {
+          send(socket, {
+            type: 'place',
+            x: visitor.pose.x,
+            z: visitor.pose.z,
+            yaw: visitor.pose.yaw,
+            moving: false,
+            resting: visitor.pose.resting,
+            dogPlaying: visitor.pose.dogPlaying,
+            dogX: visitor.pose.dogX,
+            dogZ: visitor.pose.dogZ,
+            dogYaw: visitor.pose.dogYaw,
+            dogMoving: false,
+          })
+          return
+        }
         visitor.pose = {
           id: visitor.id,
           nickname: visitor.pose.nickname,

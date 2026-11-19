@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { setTimeout as delay } from 'node:timers/promises'
 import { WebSocket } from 'ws'
+import { SPAWN } from '../shared/places.ts'
 import { readNickname, readChat, readClientMessage, readServerMessage } from '../shared/protocol.ts'
 
 // Run against a separate server: PARK_WS_PORT=18787 node server/index.ts
@@ -52,7 +53,7 @@ try {
   await delay(100)
   assert.equal(b.messages.filter(m => m.type === 'chat').length, 3)
   assert.equal(b.messages.filter(m => m.type === 'state').length, 0)
-  a.ws.send(JSON.stringify({ type: 'state', ...welcome.players[0], x: 0, z: 44 }))
+  a.ws.send(JSON.stringify({ type: 'state', ...welcome.players[0], x: SPAWN.x, z: SPAWN.z }))
   await until(() => b.messages.some(m => m.type === 'state'))
   assert.equal(b.messages.find(m => m.type === 'state').player.nickname, '산책가')
   for (let i = 2; i < 10; i++) {

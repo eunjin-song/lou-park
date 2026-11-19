@@ -8,6 +8,7 @@ let scoop = () => {}
 let bin = () => {}
 let draw = () => {}
 let rest = () => {}
+let goHome = () => {}
 
 export function bindTidy(next: { scoop: () => void; bin: () => void; draw: () => void }) {
   scoop = next.scoop
@@ -17,6 +18,15 @@ export function bindTidy(next: { scoop: () => void; bin: () => void; draw: () =>
 
 export function bindRest(next: () => void) {
   rest = next
+}
+
+export function bindReturn(next: () => void) {
+  goHome = next
+}
+
+export function requestReturn() {
+  if (isInputBlocked()) return
+  goHome()
 }
 
 export function requestScoop() {

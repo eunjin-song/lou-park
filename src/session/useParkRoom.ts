@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import { SPAWN_X, SPAWN_Z } from '../game/constants.ts'
+import { SPAWN } from '../../shared/places.ts'
 import type { MutablePose } from '../game/types.ts'
 import { CHAT_DURATION_MS, PARK_WS_PATH, readChat, readServerMessage, type ChatBubble, type NetPlayer } from '../../shared/protocol.ts'
 import { dogTarget, type DogPose } from '../avatar/followDog.ts'
-import { bindTidy } from '../input/parkActions.ts'
+import { bindReturn, bindTidy } from '../input/parkActions.ts'
 import { publishConnection } from './connection.ts'
 import { bindChatSender, publishChatError } from './chatChannel.ts'
 import { publishFeed } from './worldFeed.ts'
@@ -163,6 +163,10 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
         socket.send(JSON.stringify({ type: 'draw' }))
       },
     })
+    bindReturn(() => {
+      if (!socket || socket.readyState !== WebSocket.OPEN || !netId) return
+      socket.send(JSON.stringify({ type: 'return' }))
+    })
 
     const connect = () => {
       if (closed) return
@@ -198,7 +202,7 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
           netId = message.id
           setSelfId(message.id)
           publishChatError('')
-          const atStart = Math.hypot(local.x - SPAWN_X, local.z - SPAWN_Z) < 0.25 && !local.moving
+          const atStart = Math.hypot(local.x - SPAWN.x, local.z - SPAWN.z) < 0.25 && !local.moving
           if (atStart) {
             local.x = message.spawn.x
             local.z = message.spawn.z
@@ -225,6 +229,23 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
         }
         if (message.type === 'bag') {
           publishFeed({ clean: message.clean, used: message.used, hint: '' })
+          return
+        }
+        if (message.type === 'place') {
+          local.x = message.x
+          local.z = message.z
+          local.yaw = message.yaw
+          local.moving = false
+          local.resting = message.resting
+          local.dogPlaying = message.dogPlaying
+          placeVersion.current += 1
+          const pet = dog.current
+          if (pet) {
+            pet.x = message.dogX
+            pet.z = message.dogZ
+            pet.yaw = message.dogYaw
+            pet.moving = false
+          }
           return
         }
         if (message.type === 'join' || message.type === 'state') {
@@ -270,6 +291,7 @@ export function useParkRoom(local: MutablePose, dog: RefObject<DogPose>, placeVe
       chatSender.current = () => false
       bindChatSender(() => false)
       bindTidy({ scoop: () => {}, bin: () => {}, draw: () => {} })
+      bindReturn(() => {})
       publishFeed({ poops: [], selfId: '', clean: false, used: false, hint: '' })
       window.clearTimeout(reconnectTimer)
       socket?.close()

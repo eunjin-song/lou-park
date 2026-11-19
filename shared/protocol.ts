@@ -1,11 +1,11 @@
-import { inWater } from './places.ts'
+import { inWater, insideGrounds } from './places.ts'
 
 /** Messages shared by the park server and the browser. No rendering, no sockets. */
 
 export const PARK_WS_PORT = 8787
 export const PARK_WS_PATH = '/park'
 export const MAX_PLAYERS = 10
-export const PLAY_RADIUS_LIMIT = 55.45
+export const PLAY_RADIUS_LIMIT = 1600
 export const MIN_STATE_INTERVAL_MS = 50
 export const MAX_CLIENT_MESSAGE_CHARS = 2048
 export const MAX_SERVER_MESSAGE_CHARS = 12000
@@ -68,6 +68,7 @@ export type ClientMessage =
   | { type: 'scoop' }
   | { type: 'bin' }
   | { type: 'draw' }
+  | { type: 'return' }
 
 export type ServerMessage =
   | { type: 'chat'; id: string; text: string }
@@ -79,6 +80,7 @@ export type ServerMessage =
   | { type: 'full' }
   | { type: 'poops'; poops: ParkPoop[] }
   | ({ type: 'bag' } & BagCarry)
+  | ({ type: 'place' } & NetPose)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -100,7 +102,7 @@ function readYaw(value: unknown): number | null {
 }
 
 function insidePark(x: number, z: number): boolean {
-  return Math.hypot(x, z) <= PLAY_RADIUS_LIMIT && !inWater(x, z)
+  return insideGrounds(x, z) && !inWater(x, z)
 }
 
 export function readPose(value: Record<string, unknown>): NetPose | null {
@@ -183,6 +185,7 @@ export function readClientMessage(raw: string): ClientMessage | null {
   if (data.type === 'scoop') return { type: 'scoop' }
   if (data.type === 'bin') return { type: 'bin' }
   if (data.type === 'draw') return { type: 'draw' }
+  if (data.type === 'return') return { type: 'return' }
   if (data.type !== 'state') return null
   const pose = readPose(data)
   if (!pose) return null
@@ -242,6 +245,11 @@ export function readServerMessage(raw: string): ServerMessage | null {
   if (data.type === 'bag') {
     const bag = readBag(data)
     return bag ? { type: 'bag', ...bag } : null
+  }
+
+  if (data.type === 'place') {
+    const pose = readPose(data)
+    return pose ? { type: 'place', ...pose } : null
   }
 
   if (data.type === 'welcome') {

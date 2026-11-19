@@ -41,7 +41,7 @@ export function playgroundSignTexture(): Texture {
   })
 }
 
-export function directionSignTexture(): Texture {
+export function directionSignTexture(turn: 'left' | 'right' = 'right'): Texture {
   return board(512, 220, (ctx, width, height) => {
     ctx.fillStyle = '#fffdf8'
     ctx.fillRect(0, 0, width, height)
@@ -49,15 +49,17 @@ export function directionSignTexture(): Texture {
     ctx.lineWidth = 12
     ctx.strokeRect(8, 8, width - 16, height - 16)
     ctx.fillStyle = '#3d5c52'
-    ctx.font = '700 54px "Malgun Gothic", "Segoe UI", sans-serif'
-    ctx.textAlign = 'left'
+    ctx.font = '700 48px "Malgun Gothic", "Segoe UI", sans-serif'
+    ctx.textAlign = turn === 'right' ? 'left' : 'right'
     ctx.textBaseline = 'middle'
-    ctx.fillText('강아지 놀이터', 36, height / 2)
+    ctx.fillText('강아지 놀이터', turn === 'right' ? 28 : width - 28, height / 2)
     ctx.fillStyle = '#ef86a8'
+    const tip = turn === 'right' ? width - 26 : 26
+    const back = turn === 'right' ? width - 82 : 82
     ctx.beginPath()
-    ctx.moveTo(430, 70)
-    ctx.lineTo(430, 150)
-    ctx.lineTo(486, 110)
+    ctx.moveTo(back, 70)
+    ctx.lineTo(back, 150)
+    ctx.lineTo(tip, 110)
     ctx.closePath()
     ctx.fill()
   })

@@ -5,7 +5,8 @@ import type { Camera, Scene, WebGLRenderer } from 'three'
 import { LocalAvatar } from '../avatar/LocalAvatar.tsx'
 import { AvatarLabels } from '../ui/AvatarLabels.tsx'
 import { bindLabelCamera } from '../ui/labelAnchors.ts'
-import { CAMERA_FOV, CAMERA_OFFSET, SPAWN_X, SPAWN_Z, palette } from '../game/constants.ts'
+import { SPAWN } from '../../shared/places.ts'
+import { CAMERA_FOV, CAMERA_OFFSET, palette } from '../game/constants.ts'
 import { Park } from '../world/Park.tsx'
 import { Lights } from './Lights.tsx'
 import { Sky } from './Sky.tsx'
@@ -57,10 +58,10 @@ export function ParkScene({ nickname }: { nickname: string }) {
           dpr={[1, 1.75]}
           style={{ width: '100%', height: '100%' }}
           camera={{
-            position: [SPAWN_X + CAMERA_OFFSET.x, CAMERA_OFFSET.y, SPAWN_Z + CAMERA_OFFSET.z],
+            position: [SPAWN.x + CAMERA_OFFSET.x, CAMERA_OFFSET.y, SPAWN.z + CAMERA_OFFSET.z],
             fov: CAMERA_FOV,
             near: 0.1,
-            far: 320,
+            far: 480,
           }}
           gl={{
             antialias: true,
@@ -76,11 +77,11 @@ export function ParkScene({ nickname }: { nickname: string }) {
             gl.toneMapping = ACESFilmicToneMapping
             gl.toneMappingExposure = 1.08
             gl.shadowMap.type = PCFShadowMap
-            createdCamera.lookAt(SPAWN_X, 1.05, SPAWN_Z)
+            createdCamera.lookAt(SPAWN.x, 1.05, SPAWN.z)
           }}
         >
           <color attach="background" args={[palette.skyHorizon]} />
-          <fog attach="fog" args={[palette.fog, 70, 185]} />
+          <fog attach="fog" args={[palette.fog, 55, 190]} />
           <Sky />
           <Lights />
           <Park />
