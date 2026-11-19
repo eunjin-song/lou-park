@@ -17,7 +17,7 @@ export function paintParkMap(
   const originY = (height - spanZ * scale) / 2
   const project = (point: Pt) => ({
     x: originX + (point.x - PARK_BOUNDS.minX) * scale,
-    y: originY + (PARK_BOUNDS.maxZ - point.z) * scale,
+    y: originY + (point.z - PARK_BOUNDS.minZ) * scale,
   })
   const strokeLoop = (points: readonly Pt[], color: string, line: number) => {
     const first = points[0]
